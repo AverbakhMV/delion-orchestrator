@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from orchestrator.agents import DeveloperAgent, PlannerAgent, ReviewerAgent
+from orchestrator.agents import DeveloperAgent, PlannerAgent, ReviewerAgent, TestAgent
 from orchestrator.models import (
     CiResult,
     CiStatus,
@@ -22,6 +22,7 @@ from orchestrator.ports import CiRunner, ScmClient
 class WorkflowEngine:
     planner: PlannerAgent
     developer: DeveloperAgent
+    tester: TestAgent
     reviewer: ReviewerAgent
     scm: ScmClient
     ci: CiRunner
@@ -83,6 +84,27 @@ class WorkflowEngine:
                     branch_name=plan.branch_name,
                     changed_files=["<checkpoint-restored-output>"],
                     notes=["Результат implementation восстановлен из checkpoint."],
+                )
+
+            if WorkflowStep.TESTS_CREATED.value not in completed_steps:
+                test_change_set = self.tester.create_or_update_tests(plan, change_set)
+                change_set = CodeChangeSet(
+                    branch_name=plan.branch_name,
+                    changed_files=[*change_set.changed_files, *test_change_set.changed_files],
+                    notes=[*change_set.notes, *test_change_set.notes],
+                )
+                self._checkpoint(
+                    plan,
+                    WorkflowStep.TESTS_CREATED,
+                    completed_steps,
+                    requirements_file,
+                    checkpoint_callback,
+                )
+            else:
+                change_set = CodeChangeSet(
+                    branch_name=plan.branch_name,
+                    changed_files=[*change_set.changed_files, "<checkpoint-restored-tests>"],
+                    notes=[*change_set.notes, "Результат TestAgent восстановлен из checkpoint."],
                 )
 
             if WorkflowStep.REVIEWED.value not in completed_steps:
@@ -190,6 +212,8 @@ class WorkflowEngine:
                 "Feature-ветка, подготовленная Delion.",
                 "",
                 f"Краткое описание: {summary}",
+                "",
+                "Тесты: созданы или обновлены до review и CI.",
                 "",
                 "Политика: одна фича = одна ветка = один PR.",
             ]

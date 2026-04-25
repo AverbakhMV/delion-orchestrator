@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-DOCS_DIR = Path("docs") / "delion"
+DOCS_DIR = Path("docs")
 SYSTEM_REQUIREMENTS_FILE = DOCS_DIR / "system-requirements.md"
 BUSINESS_REQUIREMENTS_DIR = DOCS_DIR / "business-requirements"
 
@@ -162,6 +162,12 @@ def write_business_requirements(feature_key: str, task_text: str, source_file: P
             "- TODO: критерий 2.",
             "- TODO: критерий 3.",
             "",
+            "## Требования к тестам",
+            "",
+            "- TODO: указать, какие acceptance criteria должны быть покрыты автоматическими тестами.",
+            "- TODO: указать обязательные негативные сценарии и edge cases.",
+            "- TODO: указать команду запуска локальных тестов для этой фичи.",
+            "",
             "## Ограничения",
             "",
             "- Не создавать отдельные ветки для внутренних микрозадач.",
@@ -172,6 +178,7 @@ def write_business_requirements(feature_key: str, task_text: str, source_file: P
             "",
             "- [ ] Требования проверены человеком.",
             "- [ ] Acceptance criteria полные и проверяемые.",
+            "- [ ] Для каждого бизнес-требования указан способ тестовой проверки.",
             "- [ ] Системные требования проекта учтены.",
             "",
         ]

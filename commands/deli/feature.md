@@ -16,4 +16,4 @@ python main.py \deli:feature FEATURE_KEY @path/to/file.md
 python main.py \deli:feature FEATURE_KEY "Текст задачи"
 ```
 
-После выполнения покажи путь к файлу в `docs/delion/business-requirements/` и явно попроси человека проверить и дополнить бизнес-цель, пользователей, сценарии и acceptance criteria.
+После выполнения покажи путь к файлу в `docs/business-requirements/` и явно попроси человека проверить и дополнить бизнес-цель, пользователей, сценарии, acceptance criteria и требования к тестам.

@@ -27,7 +27,7 @@ class PlannerAgent:
                 ),
                 WorkItem(
                     title="Добавить или обновить тесты",
-                    description="Покрыть acceptance criteria и ожидаемые регрессии в той же feature-ветке.",
+                    description="Покрыть все бизнес-требования, acceptance criteria и ожидаемые регрессии в той же feature-ветке.",
                 ),
                 WorkItem(
                     title="Проверить сборку дистрибутива",
@@ -59,6 +59,18 @@ class DeveloperAgent:
             branch_name=plan.branch_name,
             changed_files=["<execution-agent-output>"],
             notes=[f"Применены исправления по review: {len(findings)} замечаний."],
+        )
+
+
+class TestAgent:
+    def create_or_update_tests(self, plan: FeaturePlan, change_set: CodeChangeSet) -> CodeChangeSet:
+        return CodeChangeSet(
+            branch_name=plan.branch_name,
+            changed_files=["<test-agent-output>"],
+            notes=[
+                "Заглушка TestAgent: здесь агент добавляет или обновляет тесты под все бизнес-требования и acceptance criteria.",
+                f"Тесты создаются в той же ветке: {change_set.branch_name}.",
+            ],
         )
 
 

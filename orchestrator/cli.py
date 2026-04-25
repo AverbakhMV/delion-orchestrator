@@ -5,7 +5,7 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 
-from orchestrator.agents import DeveloperAgent, PlannerAgent, ReviewerAgent
+from orchestrator.agents import DeveloperAgent, PlannerAgent, ReviewerAgent, TestAgent
 from orchestrator.artifacts import ProjectAnalyzer, write_business_requirements, write_system_requirements
 from orchestrator.ci import InMemoryCIRunner
 from orchestrator.models import FeatureRequest, WorkflowCheckpoint, WorkflowResult
@@ -125,32 +125,6 @@ def run_command(args: list[str]) -> int:
     if allow_draft:
         args = [arg for arg in args if arg != "--allow-draft"]
 
-    feature_key, requirement_text, base_branch = parse_feature_args(args)
-    if not allow_draft:
-        output_path = write_business_requirements(feature_key, requirement_text)
-        print(f"Создан файл бизнес-требований: {output_path}")
-        print("Workflow остановлен: требования должен проверить и дополнить человек.")
-        print(f"После валидации запустите: \\deli:run-file {feature_key} {output_path} --base {base_branch}")
-        return 1
-
-    result = build_engine().run_feature(
-        feature_key=feature_key,
-        requirement_text=requirement_text,
-        base_branch=base_branch,
-        checkpoint_callback=save_checkpoint,
-    )
-    save_result(result)
-    print(result.summary())
-    return 0 if not result.errors else 1
-
-
-def run_file_command(args: list[str]) -> int:
-    if len(args) < 2:
-        raise SystemExit("Usage: \\deli:run-file FEATURE_KEY REQUIREMENTS_FILE [--base master] [--allow-draft]")
-
-    allow_draft = "--allow-draft" in args
-    if allow_draft:
-        args = [arg for arg in args if arg != "--allow-draft"]
     base_branch = "master"
     if "--base" in args:
         base_index = args.index("--base")
@@ -160,14 +134,20 @@ def run_file_command(args: list[str]) -> int:
             raise SystemExit("--base требует имя ветки") from exc
         args = args[:base_index] + args[base_index + 2 :]
 
+    if len(args) != 1:
+        raise SystemExit("Usage: \\deli:run FEATURE_KEY [--base master] [--allow-draft]")
+
     feature_key = args[0]
-    requirements_file = Path(args[1])
+    requirements_file = business_requirements_path(feature_key)
     if not requirements_file.exists():
-        raise SystemExit(f"Файл требований не найден: {requirements_file}")
+        raise SystemExit(
+            f"Файл бизнес-требований не найден: {requirements_file}. "
+            f"Сначала выполните \\deli:feature {feature_key} \"Описание задачи\""
+        )
 
     requirement_text = requirements_file.read_text(encoding="utf-8")
     if not allow_draft:
-        validation_errors = validate_requirements_ready(requirement_text)
+        validation_errors = validate_ready_for_run(requirements_file)
         if validation_errors:
             print("Workflow остановлен: файл требований еще не готов.")
             for error in validation_errors:
@@ -187,6 +167,13 @@ def run_file_command(args: list[str]) -> int:
     return 0 if not result.errors else 1
 
 
+def run_file_command(args: list[str]) -> int:
+    if not args:
+        raise SystemExit("Usage: \\deli:run FEATURE_KEY [--base master] [--allow-draft]")
+    print("Команда \\deli:run-file устарела. Используйте \\deli:run FEATURE_KEY.")
+    return run_command(args[:1] + args[2:] if len(args) > 1 else args)
+
+
 def validate_command(args: list[str]) -> int:
     if not args:
         raise SystemExit("Usage: \\deli:validate <system|feature|file> [FEATURE_KEY|PATH]")
@@ -195,7 +182,7 @@ def validate_command(args: list[str]) -> int:
     validator = RequirementsValidator()
 
     if target == "system":
-        path = Path(args[1]) if len(args) > 1 else Path("docs") / "delion" / "system-requirements.md"
+        path = Path(args[1]) if len(args) > 1 else system_requirements_path()
         result = validator.validate_file(path, document_type="system")
         print_validation_result(result)
         return 0 if result.is_valid else 1
@@ -203,7 +190,7 @@ def validate_command(args: list[str]) -> int:
     if target == "feature":
         if len(args) != 2:
             raise SystemExit("Usage: \\deli:validate feature FEATURE_KEY")
-        path = Path("docs") / "delion" / "business-requirements" / f"{args[1]}.md"
+        path = business_requirements_path(args[1])
         result = validator.validate_file(path, document_type="business")
         print_validation_result(result)
         return 0 if result.is_valid else 1
@@ -319,6 +306,26 @@ def validate_requirements_ready(requirement_text: str) -> list[str]:
     return RequirementsValidator().validate_text(requirement_text, document_type="business")
 
 
+def validate_ready_for_run(requirements_file: Path) -> list[str]:
+    validator = RequirementsValidator()
+    errors = []
+
+    system_result = validator.validate_file(system_requirements_path(), document_type="system")
+    errors.extend([f"Системные требования: {error}" for error in system_result.errors])
+
+    business_result = validator.validate_file(requirements_file, document_type="business")
+    errors.extend([f"Бизнес-требования: {error}" for error in business_result.errors])
+    return errors
+
+
+def system_requirements_path() -> Path:
+    return Path("docs") / "system-requirements.md"
+
+
+def business_requirements_path(feature_key: str) -> Path:
+    return Path("docs") / "business-requirements" / f"{feature_key}.md"
+
+
 def parse_document_type(args: list[str]) -> str:
     if not args:
         return "auto"
@@ -331,6 +338,7 @@ def build_engine() -> WorkflowEngine:
     return WorkflowEngine(
         planner=PlannerAgent(),
         developer=DeveloperAgent(),
+        tester=TestAgent(),
         reviewer=ReviewerAgent(),
         scm=InMemoryScmClient(default_base_branch="master"),
         ci=InMemoryCIRunner(),
@@ -406,8 +414,7 @@ def print_help() -> None:
                 "  \\deli:feature FEATURE_KEY REQUIREMENT_TEXT",
                 "  \\deli:feature FEATURE_KEY @path/to/requirements.md",
                 "  \\deli:plan FEATURE_KEY REQUIREMENT_TEXT [--base master]",
-                "  \\deli:run FEATURE_KEY REQUIREMENT_TEXT [--base master]",
-                "  \\deli:run-file FEATURE_KEY path/to/requirements.md [--base master] [--allow-draft]",
+                "  \\deli:run FEATURE_KEY [--base master] [--allow-draft]",
                 "  \\deli:validate <system|feature|file> [FEATURE_KEY|PATH]",
                 "  \\deli:resume FEATURE_KEY",
                 "  \\deli:status [FEATURE_KEY]",
@@ -416,6 +423,7 @@ def print_help() -> None:
                 "Политика:",
                 "  одна фича = одна ветка = один PR",
                 "  один execution agent выполняет реализацию",
+                "  тесты создаются или обновляются для всех бизнес-требований до review и CI",
                 "  CI loop ограничен количеством retry",
                 "  системные и бизнес-требования требуют валидации человеком",
             ]

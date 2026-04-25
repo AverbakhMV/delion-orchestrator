@@ -1,15 +1,20 @@
 ---
-description: Подготовить workflow Delion по тексту задачи.
+description: Запустить workflow Delion по валидированным требованиям фичи.
 ---
 
-Подготовь workflow Delion по тексту задачи.
+Запусти workflow Delion по валидированному файлу бизнес-требований фичи.
 
-Перед запуском проверь, что системные требования уже созданы командой `/deli:init` или `\deli:init`.
+Перед запуском проверь:
 
-Выполни:
+- системные требования лежат в `docs/system-requirements.md`;
+- бизнес-требования лежат в `docs/business-requirements/FEATURE_KEY.md`;
+- `/deli:validate system` возвращает `VALID`;
+- `/deli:validate feature FEATURE_KEY` возвращает `VALID`.
+
+Выполни внутренний runtime:
 
 ```powershell
-python main.py \deli:run FEATURE_KEY "Текст задачи" --base master
+python main.py \deli:run FEATURE_KEY --base master
 ```
 
-Команда создаст файл бизнес-требований и остановится, пока человек не проверит и не дополнит требования. После валидации запускай `\deli:run-file`.
+Соблюдай политику: одна фича = одна ветка = один PR. Не создавай отдельные ветки для тестов или внутренних work items.

@@ -10,4 +10,4 @@ description: Продолжить workflow Delion с последнего checkp
 python main.py \deli:resume FEATURE_KEY
 ```
 
-Перед продолжением покажи сохраненные шаги из `\deli:status FEATURE_KEY`. Не создавай новую ветку для той же фичи.
+Перед продолжением покажи сохраненные шаги из `\deli:status FEATURE_KEY`. Не создавай новую ветку для той же фичи и не пропускай шаг `tests_created`.

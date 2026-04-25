@@ -22,4 +22,4 @@ python main.py \deli:validate feature FEATURE_KEY
 python main.py \deli:validate file path/to/requirements.md --type auto
 ```
 
-Если результат `INVALID`, покажи ошибки и не запускай workflow. Если результат `VALID`, можно продолжать к `\deli:run-file`.
+Если результат `INVALID`, покажи ошибки и не запускай workflow. Если результат `VALID`, можно продолжать к `\deli:run FEATURE_KEY`.

@@ -17,6 +17,7 @@ class WorkflowStatus(str, Enum):
 class WorkflowStep(str, Enum):
     BRANCH_CREATED = "branch_created"
     IMPLEMENTED = "implemented"
+    TESTS_CREATED = "tests_created"
     REVIEWED = "reviewed"
     CI_PASSED = "ci_passed"
     BRANCH_PUSHED = "branch_pushed"
