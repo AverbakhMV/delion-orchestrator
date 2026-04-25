@@ -1,0 +1,8 @@
+{
+  "name": "delion",
+  "version": "0.1.0",
+  "description": "Delion: AI-оркестратор разработки кода с политикой одна фича = одна ветка = один PR.",
+  "author": {
+    "name": "Delion"
+  }
+}
