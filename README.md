@@ -46,7 +46,7 @@ commands/deli/*.md
 ```bash
 # 1. Скачайте beta-релиз Delion extension
 curl -L -o /tmp/delion-gigacode-beta.zip \
-  https://github.com/AverbakhMV/delion/raw/main/releases/beta/delion-gigacode.zip
+  https://github.com/AverbakhMV/delion-orchestrator/raw/main/releases/beta/delion-gigacode.zip
 
 # 2. Распакуйте beta-релиз в директорию расширений GigaCode
 mkdir -p ~/.gigacode/extensions
