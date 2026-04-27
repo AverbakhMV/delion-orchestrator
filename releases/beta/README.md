@@ -17,7 +17,7 @@ delion
 Внутри пакета находятся manifest, инструкции, команды и локальный runtime:
 
 ```text
-gigacode-extnsion.json
+gigacode-extension.json
 GIGACODE.md
 commands/deli/*.md
 main.py

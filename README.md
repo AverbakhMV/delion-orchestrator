@@ -30,7 +30,7 @@ Delion - extension для GigaCode/Qwen-подобных CLI-агентов, к�
 Файлы extension:
 
 ```text
-gigacode-extnsion.json
+gigacode-extension.json
 GIGACODE.md
 commands/deli/*.md
 main.py
@@ -54,9 +54,23 @@ curl -L -o /tmp/delion-gigacode-beta.zip \
 mkdir -p ~/.gigacode/extensions
 unzip -o /tmp/delion-gigacode-beta.zip -d ~/.gigacode/extensions
 
-# 3. Запустите GigaCode и инициализируйте структуру Delion внутри проекта
+# 3. Зарегистрируйте extension в настройках GigaCode
+mkdir -p ~/.gigacode
+python -c "import json, pathlib; p=pathlib.Path.home()/'.gigacode/settings.json'; data=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}; exts=data.setdefault('extensions', []); exts.append('extensions/delion') if 'extensions/delion' not in exts else None; p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"
+
+# 4. Запустите GigaCode и инициализируйте структуру Delion внутри проекта
 gigacode
 /deli:init
+```
+
+После регистрации в `~/.gigacode/settings.json` должен быть путь к extension:
+
+```json
+{
+  "extensions": [
+    "extensions/delion"
+  ]
+}
 ```
 
 Если репозиторий уже скачан и вы находитесь в его корне, можно установить локальный beta-архив:
@@ -64,6 +78,8 @@ gigacode
 ```bash
 mkdir -p ~/.gigacode/extensions
 unzip -o releases/beta/delion-gigacode.zip -d ~/.gigacode/extensions
+mkdir -p ~/.gigacode
+python -c "import json, pathlib; p=pathlib.Path.home()/'.gigacode/settings.json'; data=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}; exts=data.setdefault('extensions', []); exts.append('extensions/delion') if 'extensions/delion' not in exts else None; p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"
 gigacode
 /deli:init
 ```
