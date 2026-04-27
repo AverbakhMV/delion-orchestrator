@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +30,13 @@ class ProjectAnalyzer:
         "node_modules",
         "dist",
         "build",
+        "target",
+        ".bloop",
+        ".metals",
+        ".scala-build",
+        ".gradle",
+        ".mvn",
+        "out",
         ".deli",
     }
 
@@ -43,6 +51,8 @@ class ProjectAnalyzer:
         ".cs": "C#",
         ".go": "Go",
         ".rs": "Rust",
+        ".scala": "Scala",
+        ".sbt": "SBT",
     }
 
     PROJECT_MARKERS = {
@@ -50,6 +60,7 @@ class ProjectAnalyzer:
         "requirements.txt": "Python requirements",
         "package.json": "Node.js package",
         "pom.xml": "Maven",
+        "build.sbt": "SBT",
         "build.gradle": "Gradle",
         "Jenkinsfile": "Jenkins pipeline",
         "Dockerfile": "Docker image",
@@ -57,7 +68,7 @@ class ProjectAnalyzer:
     }
 
     def analyze(self, root: Path) -> ProjectSnapshot:
-        files = [path for path in root.rglob("*") if path.is_file() and self._is_relevant(path)]
+        files = self._iter_project_files(root)
         languages = sorted(
             {
                 self.LANGUAGE_BY_SUFFIX[path.suffix]
@@ -87,6 +98,22 @@ class ProjectAnalyzer:
 
     def _is_relevant(self, path: Path) -> bool:
         return not any(part in self.IGNORED_DIRS for part in path.parts)
+
+    def _iter_project_files(self, root: Path) -> list[Path]:
+        files: list[Path] = []
+        for current_root, dirnames, filenames in os.walk(root, topdown=True, onerror=lambda _error: None):
+            current_path = Path(current_root)
+            dirnames[:] = [dirname for dirname in dirnames if dirname not in self.IGNORED_DIRS]
+            for filename in filenames:
+                path = current_path / filename
+                if not self._is_relevant(path):
+                    continue
+                try:
+                    if path.is_file():
+                        files.append(path)
+                except OSError:
+                    continue
+        return files
 
 
 def write_system_requirements(snapshot: ProjectSnapshot) -> Path:
