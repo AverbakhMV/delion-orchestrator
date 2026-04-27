@@ -14,4 +14,14 @@ releases/beta/delion-gigacode.zip
 delion
 ```
 
+Внутри пакета находятся manifest, инструкции, команды и локальный runtime:
+
+```text
+gigacode-extnsion.json
+GIGACODE.md
+commands/deli/*.md
+main.py
+orchestrator/*.py
+```
+
 Нумерованные релизы появятся после проверки beta-версии.

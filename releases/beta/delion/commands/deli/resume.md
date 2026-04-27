@@ -1,4 +1,4 @@
----
+﻿---
 description: Продолжить workflow Delion с последнего checkpoint.
 ---
 
@@ -7,7 +7,7 @@ description: Продолжить workflow Delion с последнего checkp
 Выполни:
 
 ```powershell
-python main.py \deli:resume FEATURE_KEY
+python "$HOME/.gigacode/extensions/delion/main.py" \deli:resume FEATURE_KEY
 ```
 
 Перед продолжением покажи сохраненные шаги из `\deli:status FEATURE_KEY`. Не создавай новую ветку для той же фичи и не пропускай шаг `tests_created`.

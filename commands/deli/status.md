@@ -1,4 +1,4 @@
----
+﻿---
 description: Показать статус запусков Delion.
 ---
 
@@ -7,11 +7,11 @@ description: Показать статус запусков Delion.
 Для конкретной фичи:
 
 ```powershell
-python main.py \deli:status FEATURE_KEY
+python "$HOME/.gigacode/extensions/delion/main.py" \deli:status FEATURE_KEY
 ```
 
 Для всех сохраненных запусков:
 
 ```powershell
-python main.py \deli:status
+python "$HOME/.gigacode/extensions/delion/main.py" \deli:status
 ```
