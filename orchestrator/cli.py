@@ -96,6 +96,7 @@ def init_command(args: list[str]) -> int:
     if args:
         raise SystemExit("Usage: \\deli:init")
 
+    initialize_project_structure()
     snapshot = ProjectAnalyzer().analyze(Path.cwd())
     output_path = write_system_requirements(snapshot)
     print(f"Создан файл системных требований: {output_path}")
@@ -114,7 +115,7 @@ def feature_command(args: list[str]) -> int:
 
     output_path = write_business_requirements(feature_key, task_text, source_file=source_file)
     print(f"Создан файл бизнес-требований: {output_path}")
-    print("Статус: требуется валидация и дополнение человеком.")
+    print("Статус: draft. Требуется проверка и дополнение человеком.")
     return 0
 
 
@@ -362,6 +363,14 @@ def build_engine() -> WorkflowEngine:
         scm=InMemoryScmClient(default_base_branch="master"),
         ci=InMemoryCIRunner(),
     )
+
+
+def initialize_project_structure() -> None:
+    STATE_DIR.mkdir(exist_ok=True)
+    if not STATE_FILE.exists():
+        STATE_FILE.write_text(json.dumps({"runs": {}, "checkpoints": {}}, indent=2), encoding="utf-8")
+    Path("docs", "business-requirements").mkdir(parents=True, exist_ok=True)
+    Path("docs", "specs").mkdir(parents=True, exist_ok=True)
 
 
 def save_result(result: WorkflowResult) -> None:

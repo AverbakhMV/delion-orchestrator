@@ -10,6 +10,7 @@
 - Перед PR должны пройти validation, review loop и CI loop.
 - `docs/system-requirements.md` и файлы `docs/business-requirements/*.md` требуют проверки человеком.
 - Для каждого бизнес-требования должны быть созданы или обновлены тесты до review и CI.
+- Если code review выдал замечания, основной агент исправляет их в той же feature branch и запускает повторный review.
 - Если требование неполное, сначала подготовь файл требований и попроси человека дополнить его.
 
 Локальный runtime для extension-команд:
@@ -21,6 +22,8 @@ python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%"
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate system
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate feature BR-001
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate file docs/business-requirements/BR-001.md --type business
+Команда /deli:test BR-001 создает или обновляет реальные тесты проекта по docs/business-requirements/BR-001.md.
+Команда /deli:review BR-001 проводит code review; замечания исправляет основной агент в той же feature branch.
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:run BR-001 --base master
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:resume BR-001
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:status BR-001
