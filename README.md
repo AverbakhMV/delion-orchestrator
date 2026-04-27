@@ -50,7 +50,7 @@ orchestrator/*.py
 ```bash
 # 1. Скачайте beta-релиз Delion extension
 curl -L -o /tmp/delion-gigacode-beta.zip \
-  https://github.com/AverbakhMV/delion/raw/main/releases/beta/delion-gigacode.zip
+  https://github.com/AverbakhMV/delion-orchestrator/raw/main/releases/beta/delion-gigacode.zip
 
 # 2. Распакуйте beta-релиз в директорию расширений GigaCode
 mkdir -p ~/.gigacode/extensions
@@ -80,7 +80,7 @@ PowerShell-вариант установки для Windows:
 
 ```powershell
 $zip = Join-Path $env:TEMP "delion-gigacode-beta.zip"
-$url = "https://github.com/AverbakhMV/delion/raw/main/releases/beta/delion-gigacode.zip"
+$url = "https://github.com/AverbakhMV/delion-orchestrator/raw/main/releases/beta/delion-gigacode.zip"
 $extensionRoot = Join-Path $env:USERPROFILE ".gigacode\extensions"
 $delionDir = Join-Path $extensionRoot "delion"
 $settingsDir = Join-Path $env:USERPROFILE ".gigacode"
