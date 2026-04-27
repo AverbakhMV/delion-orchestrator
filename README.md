@@ -52,6 +52,7 @@ curl -L -o /tmp/delion-gigacode-beta.zip \
 
 # 2. Распакуйте beta-релиз в директорию расширений GigaCode
 mkdir -p ~/.gigacode/extensions
+rm -rf ~/.gigacode/extensions/delion
 unzip -o /tmp/delion-gigacode-beta.zip -d ~/.gigacode/extensions
 
 # 3. Зарегистрируйте extension в настройках GigaCode
@@ -77,6 +78,7 @@ gigacode
 
 ```bash
 mkdir -p ~/.gigacode/extensions
+rm -rf ~/.gigacode/extensions/delion
 unzip -o releases/beta/delion-gigacode.zip -d ~/.gigacode/extensions
 mkdir -p ~/.gigacode
 python -c "import json, pathlib; p=pathlib.Path.home()/'.gigacode/settings.json'; data=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}; exts=data.setdefault('extensions', []); exts.append('extensions/delion') if 'extensions/delion' not in exts else None; p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"

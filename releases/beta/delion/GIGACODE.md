@@ -15,16 +15,16 @@
 Локальный runtime для extension-команд:
 
 ```powershell
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:init
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:feature BR-001 "Описание задачи"
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:feature BR-001 @docs/requirements.md
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:validate system
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:validate feature BR-001
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:validate file docs/business-requirements/BR-001.md --type business
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:run BR-001 --base master
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:resume BR-001
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:status BR-001
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:ci BR-001 "Описание задачи"
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:init
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:feature BR-001 "Описание задачи"
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:feature BR-001 @docs/requirements.md
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate system
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate feature BR-001
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate file docs/business-requirements/BR-001.md --type business
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:run BR-001 --base master
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:resume BR-001
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:status BR-001
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:ci BR-001 "Описание задачи"
 ```
 
 Перед `run` валидируй системные и бизнес-требования через `\deli:validate`. Если результат `INVALID`, workflow запускать нельзя.

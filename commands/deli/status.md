@@ -7,11 +7,11 @@ description: Показать статус запусков Delion.
 Для конкретной фичи:
 
 ```powershell
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:status FEATURE_KEY
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:status FEATURE_KEY
 ```
 
 Для всех сохраненных запусков:
 
 ```powershell
-python "$HOME/.gigacode/extensions/delion/main.py" \deli:status
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:status
 ```

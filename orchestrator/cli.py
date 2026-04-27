@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
@@ -22,6 +23,7 @@ STATE_FILE = STATE_DIR / "state.json"
 def main(argv: list[str] | None = None) -> int:
     configure_output_encoding()
     args = list(sys.argv[1:] if argv is None else argv)
+    args = apply_project_root_arg(args)
     if not args:
         print_help()
         return 0
@@ -60,6 +62,23 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Неизвестная команда Delion: {command}")
     print_help()
     return 2
+
+
+def apply_project_root_arg(args: list[str]) -> list[str]:
+    if "--project-root" not in args:
+        return args
+
+    root_index = args.index("--project-root")
+    try:
+        project_root = Path(args[root_index + 1]).expanduser().resolve()
+    except IndexError as exc:
+        raise SystemExit("--project-root требует путь к проекту") from exc
+
+    if not project_root.exists() or not project_root.is_dir():
+        raise SystemExit(f"Директория проекта не найдена: {project_root}")
+
+    os.chdir(project_root)
+    return args[:root_index] + args[root_index + 2 :]
 
 
 def normalize_command_args(args: list[str]) -> list[str]:
