@@ -172,7 +172,7 @@ size: M
 
 ```text
 /deli:validate feature BR-XXX
-/deli:run BR-XXX --base master
+/deli:run BR-XXX
 ```
 ```
 
@@ -194,7 +194,7 @@ ID: BR-XXX
 СЛЕДУЮЩИЙ ШАГ:
    → Проверь и дополни файл требований
    → /deli:validate feature BR-XXX
-   → /deli:run BR-XXX --base master
+   → /deli:run BR-XXX
 ═══════════════════════════════════════════
 ```
 

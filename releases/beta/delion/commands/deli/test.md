@@ -110,8 +110,14 @@ Requirements: docs/business-requirements/FEATURE_KEY.md
 
 Следующий шаг:
   → /deli:validate feature FEATURE_KEY
-  → /deli:run FEATURE_KEY --base master
+  → /deli:run FEATURE_KEY
 ═══════════════════════════════════════════
+```
+
+11. Зафиксируй прохождение стадии в state:
+
+```powershell
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:mark FEATURE_KEY tests_created --test-result "tests updated"
 ```
 
 ## Важно

@@ -2,22 +2,72 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
-from dataclasses import asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
-from orchestrator.agents import DeveloperAgent, PlannerAgent, ReviewerAgent, TestAgent
 from orchestrator.artifacts import ProjectAnalyzer, write_business_requirements, write_system_requirements
-from orchestrator.ci import InMemoryCIRunner
-from orchestrator.models import FeatureRequest, WorkflowCheckpoint, WorkflowResult
-from orchestrator.scm import InMemoryScmClient
+from orchestrator.models import WorkflowStep
 from orchestrator.validation import RequirementsValidator
-from orchestrator.workflow import WorkflowEngine
 
 
 COMMAND_PREFIXES = {"\\deli", "/deli", "deli"}
 STATE_DIR = Path(".deli")
 STATE_FILE = STATE_DIR / "state.json"
+FEATURE_KEY_PATTERN = re.compile(r"^BR-\d{3,}$")
+WORKFLOW_STEP_ORDER = [
+    WorkflowStep.BRANCH_CREATED.value,
+    WorkflowStep.IMPLEMENTED.value,
+    WorkflowStep.TESTS_CREATED.value,
+    WorkflowStep.REVIEWED.value,
+    WorkflowStep.CI_PASSED.value,
+    WorkflowStep.BRANCH_PUSHED.value,
+    WorkflowStep.PR_CREATED.value,
+]
+INVALIDATING_STEPS = {
+    WorkflowStep.IMPLEMENTED.value,
+    WorkflowStep.TESTS_CREATED.value,
+}
+REQUIRED_MARK_OPTIONS = {
+    WorkflowStep.CI_PASSED.value: ["build-url"],
+    WorkflowStep.PR_CREATED.value: ["pr-url"],
+}
+STEP_FIELDS = {
+    WorkflowStep.TESTS_CREATED.value: ["test_result"],
+    WorkflowStep.REVIEWED.value: ["review_summary"],
+    WorkflowStep.CI_PASSED.value: ["build_url"],
+    WorkflowStep.PR_CREATED.value: ["pr_url"],
+}
+NEXT_STEP_AGENT_ACTIONS = {
+    WorkflowStep.BRANCH_CREATED.value: {
+        "agent_action": "mcp_git_branch",
+        "mcp_action": "create_or_switch_feature_branch",
+    },
+    WorkflowStep.IMPLEMENTED.value: {
+        "agent_action": "implement_code",
+    },
+    WorkflowStep.TESTS_CREATED.value: {
+        "agent_action": "execute_prompt_stage",
+        "prompt_file": "commands/deli/test.md",
+    },
+    WorkflowStep.REVIEWED.value: {
+        "agent_action": "execute_prompt_stage",
+        "prompt_file": "commands/deli/review.md",
+    },
+    WorkflowStep.CI_PASSED.value: {
+        "agent_action": "execute_prompt_stage",
+        "prompt_file": "commands/deli/ci.md",
+    },
+    WorkflowStep.BRANCH_PUSHED.value: {
+        "agent_action": "mcp_git_push",
+        "mcp_action": "push_feature_branch",
+    },
+    WorkflowStep.PR_CREATED.value: {
+        "agent_action": "mcp_create_pr",
+        "mcp_action": "create_pull_request",
+    },
+}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -44,23 +94,30 @@ def main(argv: list[str] | None = None) -> int:
         return init_command(command_args)
     if command == "feature":
         return feature_command(command_args)
-    if command == "plan":
-        return plan_command(command_args)
-    if command == "run":
-        return run_command(command_args)
-    if command == "run-file":
-        return run_file_command(command_args)
+    if command in {"plan", "run", "run-file", "ci", "test", "review"}:
+        return prompt_only_command(command)
     if command == "validate":
         return validate_command(command_args)
+    if command == "mark":
+        return mark_command(command_args)
     if command == "resume":
         return resume_command(command_args)
     if command == "status":
         return status_command(command_args)
-    if command == "ci":
-        return ci_command(command_args)
+    if command in {"test", "review"}:
+        print(f"Команда \\deli:{command} выполняется агентом GigaCode через prompt, а не Python runtime.")
+        return 2
 
     print(f"Неизвестная команда Delion: {command}")
     print_help()
+    return 2
+
+
+def prompt_only_command(command: str) -> int:
+    print(
+        f"\\deli:{command} is a GigaCode prompt command, not a Python runtime command. "
+        "Python runtime is limited to local document/state operations: init, feature, validate, mark, resume, status."
+    )
     return 2
 
 
@@ -119,81 +176,6 @@ def feature_command(args: list[str]) -> int:
     return 0
 
 
-def plan_command(args: list[str]) -> int:
-    feature_key, requirement_text, base_branch = parse_feature_args(args)
-    planner = PlannerAgent()
-    plan = planner.build_plan(
-        FeatureRequest(
-            key=feature_key,
-            requirement_text=requirement_text,
-            base_branch=base_branch,
-        )
-    )
-
-    print(f"feature: {plan.feature.key}")
-    print(f"base_branch: {plan.feature.base_branch}")
-    print(f"branch: {plan.branch_name}")
-    print(f"summary: {plan.summary}")
-    print("work_items:")
-    for index, item in enumerate(plan.work_items, start=1):
-        print(f"  {index}. {item.title}: {item.description}")
-    return 0
-
-
-def run_command(args: list[str]) -> int:
-    allow_draft = "--allow-draft" in args
-    if allow_draft:
-        args = [arg for arg in args if arg != "--allow-draft"]
-
-    base_branch = "master"
-    if "--base" in args:
-        base_index = args.index("--base")
-        try:
-            base_branch = args[base_index + 1]
-        except IndexError as exc:
-            raise SystemExit("--base требует имя ветки") from exc
-        args = args[:base_index] + args[base_index + 2 :]
-
-    if len(args) != 1:
-        raise SystemExit("Usage: \\deli:run FEATURE_KEY [--base master] [--allow-draft]")
-
-    feature_key = args[0]
-    requirements_file = business_requirements_path(feature_key)
-    if not requirements_file.exists():
-        raise SystemExit(
-            f"Файл бизнес-требований не найден: {requirements_file}. "
-            f"Сначала выполните \\deli:feature {feature_key} \"Описание задачи\""
-        )
-
-    requirement_text = requirements_file.read_text(encoding="utf-8")
-    if not allow_draft:
-        validation_errors = validate_ready_for_run(requirements_file)
-        if validation_errors:
-            print("Workflow остановлен: файл требований еще не готов.")
-            for error in validation_errors:
-                print(f"- {error}")
-            print("Дополните файл и повторите запуск или используйте --allow-draft только для отладки.")
-            return 1
-
-    result = build_engine().run_feature(
-        feature_key=feature_key,
-        requirement_text=requirement_text,
-        base_branch=base_branch,
-        requirements_file=str(requirements_file),
-        checkpoint_callback=save_checkpoint,
-    )
-    save_result(result)
-    print(result.summary())
-    return 0 if not result.errors else 1
-
-
-def run_file_command(args: list[str]) -> int:
-    if not args:
-        raise SystemExit("Usage: \\deli:run FEATURE_KEY [--base master] [--allow-draft]")
-    print("Команда \\deli:run-file устарела. Используйте \\deli:run FEATURE_KEY.")
-    return run_command(args[:1] + args[2:] if len(args) > 1 else args)
-
-
 def validate_command(args: list[str]) -> int:
     if not args:
         raise SystemExit("Usage: \\deli:validate <system|feature|file> [FEATURE_KEY|PATH]")
@@ -232,29 +214,24 @@ def resume_command(args: list[str]) -> int:
         raise SystemExit("Usage: \\deli:resume FEATURE_KEY")
 
     feature_key = args[0]
+    validate_feature_key(feature_key)
     checkpoint = load_state().get("checkpoints", {}).get(feature_key)
     if not checkpoint:
         print(f"Checkpoint не найден для фичи: {feature_key}")
         return 1
 
-    requirements_file = checkpoint.get("requirements_file")
-    requirement_text = checkpoint["requirement_text"]
-    if requirements_file:
-        path = Path(requirements_file)
-        if path.exists():
-            requirement_text = path.read_text(encoding="utf-8")
-
-    result = build_engine().run_feature(
-        feature_key=feature_key,
-        requirement_text=requirement_text,
-        base_branch=checkpoint.get("base_branch", "master"),
-        completed_steps=set(checkpoint.get("completed_steps", [])),
-        requirements_file=requirements_file,
-        checkpoint_callback=save_checkpoint,
-    )
-    save_result(result)
-    print(result.summary())
-    return 0 if not result.errors else 1
+    print_checkpoint_status(checkpoint)
+    next_step = next_workflow_step(checkpoint.get("completed_steps", []))
+    print("resume_mode=agent")
+    print(f"feature={feature_key}")
+    if next_step:
+        print(f"next_step={next_step}")
+        for key, value in NEXT_STEP_AGENT_ACTIONS[next_step].items():
+            print(f"{key}={value}")
+    else:
+        print("next_step=done")
+        print("agent_action=none")
+    return 0
 
 
 def status_command(args: list[str]) -> int:
@@ -286,25 +263,180 @@ def status_command(args: list[str]) -> int:
     return 0
 
 
-def ci_command(args: list[str]) -> int:
-    feature_key, requirement_text, base_branch = parse_feature_args(args)
-    planner = PlannerAgent()
-    ci = InMemoryCIRunner()
-    plan = planner.build_plan(
-        FeatureRequest(
-            key=feature_key,
-            requirement_text=requirement_text,
-            base_branch=base_branch,
-        )
+def mark_command(args: list[str]) -> int:
+    if len(args) < 2:
+        raise SystemExit(mark_usage())
+
+    feature_key = args[0]
+    validate_feature_key(feature_key)
+    step = args[1]
+    allowed_steps = {workflow_step.value for workflow_step in WorkflowStep}
+    if step not in allowed_steps:
+        raise SystemExit(f"STEP должен быть одним из: {', '.join(sorted(allowed_steps))}")
+
+    options = parse_mark_options(args[2:])
+    validate_required_mark_options(step, options)
+    state = load_state()
+    checkpoints = state.setdefault("checkpoints", {})
+    checkpoint = checkpoints.setdefault(
+        feature_key,
+        {
+            "feature_key": feature_key,
+            "requirement_text": read_requirement_text(feature_key),
+            "base_branch": options.get("base") or "unknown",
+            "branch_name": options.get("branch") or "",
+            "completed_steps": [],
+            "requirements_file": str(business_requirements_path(feature_key)),
+            "status": "planned",
+        },
     )
-    result = ci.run_validation_loop(plan=plan, branch_name=plan.branch_name, max_attempts=3)
-    print(f"feature={feature_key} | branch={plan.branch_name} | ci={result.status.value} | build={result.build_url}")
-    return 0 if result.status.value == "success" else 1
+
+    completed_steps = checkpoint.setdefault("completed_steps", [])
+    validate_checkpoint_order(step, completed_steps)
+    if step in INVALIDATING_STEPS:
+        invalidate_following_steps(checkpoint, step)
+        completed_steps = checkpoint.setdefault("completed_steps", [])
+    if step not in completed_steps:
+        completed_steps.append(step)
+    if options.get("branch"):
+        checkpoint["branch_name"] = options["branch"]
+    if options.get("base"):
+        checkpoint["base_branch"] = options["base"]
+    checkpoint["status"] = options.get("status") or step
+    checkpoint["updated_at"] = now_utc()
+    if options.get("note"):
+        notes = checkpoint.setdefault("notes", [])
+        notes.append(options["note"])
+    if options.get("build-url"):
+        checkpoint["build_url"] = options["build-url"]
+    if options.get("pr-url"):
+        checkpoint["pr_url"] = options["pr-url"]
+    if options.get("review-summary"):
+        checkpoint["review_summary"] = options["review-summary"]
+    if options.get("test-result"):
+        checkpoint["test_result"] = options["test-result"]
+    if options.get("last-error"):
+        checkpoint["last_error"] = options["last-error"]
+
+    steps = checkpoint.setdefault("steps", {})
+    step_record = steps.setdefault(step, {})
+    step_record["completed_at"] = now_utc()
+    for option_name in ["branch", "base", "note", "build-url", "pr-url", "review-summary", "test-result", "last-error"]:
+        if options.get(option_name):
+            step_record[option_name.replace("-", "_")] = options[option_name]
+
+    STATE_DIR.mkdir(exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"checkpoint={feature_key} | completed={','.join(completed_steps)} | status={checkpoint['status']}")
+    return 0
+
+
+def parse_mark_options(args: list[str]) -> dict[str, str]:
+    options: dict[str, str] = {}
+    allowed_options = {
+        "--branch",
+        "--base",
+        "--status",
+        "--note",
+        "--build-url",
+        "--pr-url",
+        "--review-summary",
+        "--test-result",
+        "--last-error",
+    }
+    index = 0
+    while index < len(args):
+        option = args[index]
+        if option not in allowed_options:
+            raise SystemExit(mark_usage())
+        try:
+            value = args[index + 1]
+        except IndexError as exc:
+            raise SystemExit(f"{option} требует значение") from exc
+        options[option.removeprefix("--")] = value
+        index += 2
+    return options
+
+
+def mark_usage() -> str:
+    return (
+        "Usage: \\deli:mark FEATURE_KEY STEP [--branch BRANCH] [--base BASE] "
+        "[--status STATUS] [--note TEXT] [--build-url URL] [--pr-url URL] "
+        "[--review-summary TEXT] [--test-result TEXT] [--last-error TEXT]"
+    )
+
+
+def validate_checkpoint_order(step: str, completed_steps: list[str]) -> None:
+    expected_index = WORKFLOW_STEP_ORDER.index(step)
+    missing_steps = [
+        required_step
+        for required_step in WORKFLOW_STEP_ORDER[:expected_index]
+        if required_step not in completed_steps
+    ]
+    if missing_steps:
+        raise SystemExit(
+            f"Cannot mark {step}: missing previous checkpoint(s): {', '.join(missing_steps)}"
+        )
+
+
+def validate_required_mark_options(step: str, options: dict[str, str]) -> None:
+    missing_options = [
+        option_name for option_name in REQUIRED_MARK_OPTIONS.get(step, []) if not options.get(option_name)
+    ]
+    if missing_options:
+        formatted = ", ".join(f"--{option_name}" for option_name in missing_options)
+        raise SystemExit(f"Cannot mark {step}: missing required option(s): {formatted}")
+
+
+def invalidate_following_steps(checkpoint: dict, step: str) -> None:
+    completed_steps = checkpoint.setdefault("completed_steps", [])
+    if step not in completed_steps:
+        return
+
+    step_index = WORKFLOW_STEP_ORDER.index(step)
+    removed_steps = [
+        completed_step
+        for completed_step in completed_steps
+        if WORKFLOW_STEP_ORDER.index(completed_step) > step_index
+    ]
+    if not removed_steps:
+        return
+
+    checkpoint["completed_steps"] = [
+        completed_step
+        for completed_step in completed_steps
+        if WORKFLOW_STEP_ORDER.index(completed_step) <= step_index
+    ]
+
+    step_records = checkpoint.get("steps", {})
+    for removed_step in removed_steps:
+        step_records.pop(removed_step, None)
+        for field_name in STEP_FIELDS.get(removed_step, []):
+            checkpoint.pop(field_name, None)
+
+
+def next_workflow_step(completed_steps: list[str]) -> str | None:
+    completed = set(completed_steps)
+    for step in WORKFLOW_STEP_ORDER:
+        if step not in completed:
+            return step
+    return None
+
+
+def now_utc() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def read_requirement_text(feature_key: str) -> str:
+    path = business_requirements_path(feature_key)
+    if path.exists():
+        return path.read_text(encoding="utf-8")
+    return ""
 
 
 def parse_feature_args(args: list[str]) -> tuple[str, str, str]:
     if len(args) < 2:
-        raise SystemExit("Usage: \\deli:<plan|run|feature|ci> FEATURE_KEY REQUIREMENT_TEXT [--base master]")
+        raise SystemExit("Usage: \\deli:feature FEATURE_KEY REQUIREMENT_TEXT")
 
     base_branch = "master"
     if "--base" in args:
@@ -316,6 +448,7 @@ def parse_feature_args(args: list[str]) -> tuple[str, str, str]:
         args = args[:base_index] + args[base_index + 2 :]
 
     feature_key = args[0]
+    validate_feature_key(feature_key)
     requirement_text = " ".join(args[1:]).strip()
     if not requirement_text:
         raise SystemExit("Текст требования не может быть пустым")
@@ -343,7 +476,13 @@ def system_requirements_path() -> Path:
 
 
 def business_requirements_path(feature_key: str) -> Path:
+    validate_feature_key(feature_key)
     return Path("docs") / "business-requirements" / f"{feature_key}.md"
+
+
+def validate_feature_key(feature_key: str) -> None:
+    if not FEATURE_KEY_PATTERN.fullmatch(feature_key):
+        raise SystemExit("FEATURE_KEY должен иметь формат BR-001.")
 
 
 def parse_document_type(args: list[str]) -> str:
@@ -354,17 +493,6 @@ def parse_document_type(args: list[str]) -> str:
     raise SystemExit("Usage: \\deli:validate file PATH [--type system|business|auto]")
 
 
-def build_engine() -> WorkflowEngine:
-    return WorkflowEngine(
-        planner=PlannerAgent(),
-        developer=DeveloperAgent(),
-        tester=TestAgent(),
-        reviewer=ReviewerAgent(),
-        scm=InMemoryScmClient(default_base_branch="master"),
-        ci=InMemoryCIRunner(),
-    )
-
-
 def initialize_project_structure() -> None:
     STATE_DIR.mkdir(exist_ok=True)
     if not STATE_FILE.exists():
@@ -373,25 +501,9 @@ def initialize_project_structure() -> None:
     Path("docs", "specs").mkdir(parents=True, exist_ok=True)
 
 
-def save_result(result: WorkflowResult) -> None:
-    STATE_DIR.mkdir(exist_ok=True)
-    state = load_state()
-    runs = state.setdefault("runs", {})
-    runs[result.feature_key] = asdict(result)
-    STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
-
-
-def save_checkpoint(checkpoint: WorkflowCheckpoint) -> None:
-    STATE_DIR.mkdir(exist_ok=True)
-    state = load_state()
-    checkpoints = state.setdefault("checkpoints", {})
-    checkpoints[checkpoint.feature_key] = asdict(checkpoint)
-    STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
-
-
 def load_state() -> dict:
     if not STATE_FILE.exists():
-        return {"runs": {}}
+        return {"runs": {}, "checkpoints": {}}
     return json.loads(STATE_FILE.read_text(encoding="utf-8"))
 
 
@@ -418,6 +530,11 @@ def print_checkpoint_status(checkpoint: dict) -> None:
     ]
     if checkpoint.get("requirements_file"):
         parts.append(f"requirements={checkpoint['requirements_file']}")
+    if checkpoint.get("build_url"):
+        parts.append(f"build={checkpoint['build_url']}")
+    if checkpoint.get("pr_url"):
+        parts.append(f"pr={checkpoint['pr_url']}")
+    parts.append(f"next={next_workflow_step(checkpoint.get('completed_steps', [])) or 'done'}")
     print(" | ".join(parts))
 
 
@@ -441,12 +558,10 @@ def print_help() -> None:
                 "  \\deli:init",
                 "  \\deli:feature FEATURE_KEY REQUIREMENT_TEXT",
                 "  \\deli:feature FEATURE_KEY @path/to/requirements.md",
-                "  \\deli:plan FEATURE_KEY REQUIREMENT_TEXT [--base master]",
-                "  \\deli:run FEATURE_KEY [--base master] [--allow-draft]",
                 "  \\deli:validate <system|feature|file> [FEATURE_KEY|PATH]",
+                "  \\deli:mark FEATURE_KEY STEP [--branch BRANCH] [--base BASE] [--status STATUS]",
                 "  \\deli:resume FEATURE_KEY",
                 "  \\deli:status [FEATURE_KEY]",
-                "  \\deli:ci FEATURE_KEY REQUIREMENT_TEXT [--base master]",
                 "",
                 "Политика:",
                 "  одна фича = одна ветка = один PR",

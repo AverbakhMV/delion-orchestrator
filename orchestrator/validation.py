@@ -47,6 +47,12 @@ class RequirementsValidator:
 
         text = path.read_text(encoding="utf-8")
         resolved_type = self._resolve_type(text, document_type)
+        if resolved_type == "unknown":
+            return ValidationResult(
+                path=path,
+                document_type=resolved_type,
+                errors=["Не удалось определить тип документа требований."],
+            )
         errors = self.validate_text(text, resolved_type)
         warnings = self._warnings(text)
         return ValidationResult(
@@ -72,6 +78,8 @@ class RequirementsValidator:
             errors.append("Статус файла указывает, что требуется валидация человеком.")
         if "требуется валидация и дополнение человеком" in text.lower():
             errors.append("Статус файла указывает, что требуется валидация и дополнение человеком.")
+        if "status: draft" in text.lower() or "Статус: draft" in text:
+            errors.append("Статус файла draft; требуется ручная проверка и перевод в ready.")
 
         return errors
 

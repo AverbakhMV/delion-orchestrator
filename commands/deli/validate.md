@@ -22,4 +22,4 @@ python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%"
 python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:validate file path/to/requirements.md --type auto
 ```
 
-Если результат `INVALID`, покажи ошибки и не запускай workflow. Если результат `VALID`, можно продолжать к `\deli:run FEATURE_KEY`.
+Если результат `INVALID`, покажи ошибки и не запускай workflow. Если результат `VALID`, можно продолжать к `/deli:run FEATURE_KEY`.

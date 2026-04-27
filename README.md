@@ -50,7 +50,7 @@ orchestrator/*.py
 ```bash
 # 1. Скачайте beta-релиз Delion extension
 curl -L -o /tmp/delion-gigacode-beta.zip \
-  https://github.com/AverbakhMV/delion-orchestrator/raw/main/releases/beta/delion-gigacode.zip
+  https://github.com/AverbakhMV/delion/raw/main/releases/beta/delion-gigacode.zip
 
 # 2. Распакуйте beta-релиз в директорию расширений GigaCode
 mkdir -p ~/.gigacode/extensions
@@ -76,6 +76,38 @@ gigacode
 }
 ```
 
+PowerShell-вариант установки для Windows:
+
+```powershell
+$zip = Join-Path $env:TEMP "delion-gigacode-beta.zip"
+$url = "https://github.com/AverbakhMV/delion/raw/main/releases/beta/delion-gigacode.zip"
+$extensionRoot = Join-Path $env:USERPROFILE ".gigacode\extensions"
+$delionDir = Join-Path $extensionRoot "delion"
+$settingsDir = Join-Path $env:USERPROFILE ".gigacode"
+$settingsFile = Join-Path $settingsDir "settings.json"
+
+Invoke-WebRequest -Uri $url -OutFile $zip
+New-Item -ItemType Directory -Force -Path $extensionRoot | Out-Null
+if (Test-Path -LiteralPath $delionDir) {
+    Remove-Item -LiteralPath $delionDir -Recurse -Force
+}
+Expand-Archive -LiteralPath $zip -DestinationPath $extensionRoot -Force
+
+New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null
+$settings = if (Test-Path -LiteralPath $settingsFile) {
+    Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json
+} else {
+    [pscustomobject]@{}
+}
+if (-not ($settings.PSObject.Properties.Name -contains "extensions")) {
+    $settings | Add-Member -MemberType NoteProperty -Name "extensions" -Value @()
+}
+if ($settings.extensions -notcontains "extensions/delion") {
+    $settings.extensions = @($settings.extensions) + "extensions/delion"
+}
+$settings | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $settingsFile -Encoding UTF8
+```
+
 Если репозиторий уже скачан и вы находитесь в его корне, можно установить локальный beta-архив:
 
 ```bash
@@ -86,6 +118,12 @@ mkdir -p ~/.gigacode
 python -c "import json, pathlib; p=pathlib.Path.home()/'.gigacode/settings.json'; data=json.loads(p.read_text(encoding='utf-8')) if p.exists() else {}; exts=data.setdefault('extensions', []); exts.append('extensions/delion') if 'extensions/delion' not in exts else None; p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')"
 gigacode
 /deli:init
+```
+
+Собрать локальный beta-архив из текущих исходников:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_release.ps1
 ```
 
 ## Команды
@@ -117,7 +155,7 @@ docs/business-requirements/BR-001.md
 /deli:validate file docs/business-requirements/BR-001.md --type business
 ```
 
-Валидирует системные или бизнес-требования. Delion считает файл неготовым, если в нем остались `TODO`, unchecked-пункты, статус ручной валидации или отсутствуют обязательные секции.
+Валидирует системные или бизнес-требования. Delion считает файл неготовым, если в нем остались `TODO`, unchecked-пункты, `status: draft`, статус ручной валидации или отсутствуют обязательные секции.
 
 ```text
 /deli:test BR-001
@@ -132,10 +170,12 @@ docs/business-requirements/BR-001.md
 Проводит code review изменений по бизнес-требованию. Если review нашел замечания, основной агент должен исправить их в той же feature branch, обновить тесты при изменении поведения и повторить review до принятия.
 
 ```text
-/deli:run BR-001 --base master
+/deli:run BR-001
 ```
 
-Запускает workflow по `docs/business-requirements/BR-001.md` только после валидации системных и бизнес-требований.
+Запускает workflow по `docs/business-requirements/BR-001.md` только после валидации системных и бизнес-требований. Git branch, push, Jenkins и PR выполняются GigaCode через доступные MCP/tools.
+
+`/deli:run` выполняет полный цикл: реализация, тесты, review loop, CI, push и PR. Отдельные `/deli:test`, `/deli:review` и `/deli:ci` нужны для ручного запуска или повторения конкретной стадии.
 
 ```text
 /deli:resume BR-001
@@ -150,10 +190,10 @@ docs/business-requirements/BR-001.md
 Показывает run status и checkpoint.
 
 ```text
-/deli:ci BR-001 "Описание задачи"
+/deli:ci BR-001
 ```
 
-Запускает CI loop для фичи.
+Запускает Jenkins CI loop для фичи через MCP/tools GigaCode.
 
 ## Workflow
 
@@ -172,12 +212,10 @@ system requirements
 
 Ключевые компоненты:
 
-- `PlannerAgent` составляет план реализации.
-- `DeveloperAgent` представляет один execution agent.
-- `TestAgent` добавляет или обновляет тесты под все бизнес-требования и acceptance criteria.
-- `ReviewerAgent` проверяет изменения до PR.
-- `WorkflowEngine` управляет feature workflow.
-- CI loop выполняет bounded retry-проверку.
+- prompt-команды из `commands/deli/` управляют стадиями workflow;
+- Python runtime создает и валидирует документы, а также ведет checkpoint-и;
+- GigaCode MCP/tools выполняют реальные git, Jenkins и PR действия;
+- CI loop выполняется через Jenkins MCP/tools GigaCode.
 
 ## Resume
 
@@ -236,12 +274,3 @@ commands/deli/*.md
 /deli:status
 /deli:ci
 ```
-
-## Внутренний Runtime
-
-Внутри команд Delion сейчас используется Python runtime и in-memory адаптеры:
-
-- `InMemoryScmClient`
-- `InMemoryCIRunner`
-
-Для production-поведения их нужно заменить на реальные адаптеры GitHub/GitLab и Jenkins. Runtime-команды предназначены для реализации extension-команд и отладки, а не как основной пользовательский интерфейс.

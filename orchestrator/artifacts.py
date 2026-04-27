@@ -237,7 +237,7 @@ def write_business_requirements(feature_key: str, task_text: str, source_file: P
             "",
             "```text",
             f"\\deli:validate feature {feature_key}",
-            f"\\deli:run {feature_key} --base master",
+            f"\\deli:run {feature_key}",
             "```",
             "",
         ]
