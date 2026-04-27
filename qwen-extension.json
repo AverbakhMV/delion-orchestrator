@@ -1,6 +1,6 @@
 {
   "name": "delion",
-  "version": "0.1.0",
+  "version": "beta",
   "description": "AI-оркестратор разработки кода для терминальных CLI-агентов.",
   "contextFileName": "GIGACODE.md",
   "commands": "commands"

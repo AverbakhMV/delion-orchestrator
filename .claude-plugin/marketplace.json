@@ -8,7 +8,7 @@
       "name": "delion",
       "source": ".",
       "description": "AI-оркестратор разработки кода с политикой одна фича = одна ветка = один PR.",
-      "version": "0.1.0",
+      "version": "beta",
       "author": {
         "name": "Delion"
       }

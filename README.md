@@ -44,23 +44,24 @@ commands/deli/*.md
 Корпоративный fork Qwen:
 
 ```bash
-# 1. Скачайте последний релиз Delion extension для GigaCode
+# 1. Скачайте beta-релиз Delion extension
+curl -L -o /tmp/delion-gigacode-beta.zip \
+  https://raw.githubusercontent.com/AverbakhMV/delion/main/releases/beta/delion-gigacode.zip
+
+# 2. Распакуйте beta-релиз в директорию расширений GigaCode
 mkdir -p ~/.gigacode/extensions
-curl -sL https://github.com/YOUR_ORG/delion/releases/latest/download/delion-gigacode.zip \
-  | bsdtar -xvf - -C ~/.gigacode/extensions/
+unzip -o /tmp/delion-gigacode-beta.zip -d ~/.gigacode/extensions
 
-# 2. Запустите GigaCode. Команды /deli:* зарегистрируются автоматически
+# 3. Запустите GigaCode и инициализируйте структуру Delion внутри проекта
 gigacode
-
-# 3. Инициализируйте структуру Delion внутри проекта
 /deli:init
 ```
 
-Пока архив релиза не опубликован, используйте локальный вариант для разработки:
+Если репозиторий уже скачан и вы находитесь в его корне, можно установить локальный beta-архив:
 
 ```bash
-mkdir -p ~/.gigacode/extensions/delion
-cp -R qwen-extension.json GIGACODE.md commands ~/.gigacode/extensions/delion/
+mkdir -p ~/.gigacode/extensions
+unzip -o releases/beta/delion-gigacode.zip -d ~/.gigacode/extensions
 gigacode
 /deli:init
 ```
@@ -184,7 +185,7 @@ commands/deli/*.md
 Локальная установка:
 
 ```text
-/plugin marketplace add ./path/to/delion
+/plugin marketplace add ./delion
 /plugin install delion@delion-marketplace
 ```
 
