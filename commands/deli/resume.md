@@ -1,4 +1,4 @@
-﻿---
+---
 description: Продолжить workflow Delion с последнего checkpoint.
 ---
 
@@ -7,7 +7,7 @@ description: Продолжить workflow Delion с последнего checkp
 Сначала выполни read-only runtime-команду:
 
 ```powershell
-python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:resume FEATURE_KEY
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" /deli:resume FEATURE_KEY
 ```
 
 Runtime ничего не выполняет сам. Он возвращает структурированный вывод для агента:

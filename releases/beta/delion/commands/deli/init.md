@@ -42,7 +42,7 @@ docs/
 2. Выполни runtime-команду:
 
 ```powershell
-python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:init
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" /deli:init
 ```
 
 3. Убедись, что в проекте появился файл:

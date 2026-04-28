@@ -81,13 +81,13 @@ docs/business-requirements/BR-XXX.md
 4. Если пользователь передал путь к файлу, выполни:
 
 ```powershell
-python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:feature FEATURE_KEY @path/to/file.md
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" /deli:feature FEATURE_KEY @path/to/file.md
 ```
 
 5. Если пользователь передал текст задачи, выполни:
 
 ```powershell
-python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" \deli:feature FEATURE_KEY "Текст задачи"
+python "%USERPROFILE%\.gigacode\extensions\delion\main.py" --project-root "%CD%" /deli:feature FEATURE_KEY "Текст задачи"
 ```
 
    В `Текст задачи` включи исходное описание и ответы пользователя на уточняющие вопросы, чтобы runtime создал более полный черновик.
@@ -143,19 +143,21 @@ size: M
 
 - [ ] Функционал работает для основного сценария.
 - [ ] Ошибки и edge cases обработаны.
-- [ ] Поведение проверено тестами или явно описано, почему тесты не нужны.
+- [ ] Поведение покрыто созданными или обновленными тестами либо явно описано, почему тесты не нужны.
 
 ## Требования к тестам
 
 - [ ] Указать acceptance criteria, которые должны быть покрыты автоматическими тестами.
 - [ ] Указать обязательные негативные сценарии и edge cases.
-- [ ] Указать команду локального запуска тестов для этой фичи.
+- [ ] Указать, какие тестовые файлы и сценарии должны быть созданы или обновлены для этой фичи.
 
 ## Ограничения
 
 - Одна фича выполняется в одной feature-ветке и одном PR.
 - Внутренние work items не создают отдельные ветки.
-- PR не создается до прохождения review loop и CI loop.
+- Code review должен быть принят до push и PR.
+- PR не создается до прохождения review loop.
+- Jenkins CI запускается после merge PR в основную ветку.
 - TODO: добавить проектные ограничения, если есть.
 
 ## Готовность к разработке
