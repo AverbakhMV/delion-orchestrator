@@ -106,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
         return validate_command(command_args)
     if command == "mark":
         return mark_command(command_args)
+    if command == "subtask":
+        return subtask_command(command_args)
     if command == "resume":
         return resume_command(command_args)
     if command == "status":
@@ -234,6 +236,12 @@ def resume_command(args: list[str]) -> int:
         print(f"next_step={next_step}")
         for key, value in NEXT_STEP_AGENT_ACTIONS[next_step].items():
             print(f"{key}={value}")
+        next_subtask = next_open_subtask(checkpoint)
+        if next_step == WorkflowStep.IMPLEMENTED.value and next_subtask:
+            print(f"subtask_id={next_subtask['id']}")
+            print(f"subtask_status={next_subtask['status']}")
+            if next_subtask.get("title"):
+                print(f"subtask_title={next_subtask['title']}")
     else:
         print("next_step=done")
         print("agent_action=none")
@@ -299,6 +307,8 @@ def mark_command(args: list[str]) -> int:
 
     completed_steps = checkpoint.setdefault("completed_steps", [])
     validate_checkpoint_order(step, completed_steps)
+    if step == WorkflowStep.IMPLEMENTED.value:
+        validate_subtasks_completed(checkpoint)
     if step in INVALIDATING_STEPS:
         invalidate_following_steps(checkpoint, step)
         completed_steps = checkpoint.setdefault("completed_steps", [])
@@ -335,6 +345,112 @@ def mark_command(args: list[str]) -> int:
     STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"checkpoint={feature_key} | completed={','.join(completed_steps)} | status={checkpoint['status']}")
     return 0
+
+
+def subtask_command(args: list[str]) -> int:
+    if len(args) < 3:
+        raise SystemExit(subtask_usage())
+
+    feature_key = args[0]
+    validate_feature_key(feature_key)
+    subtask_id = args[1]
+    status = args[2]
+    validate_subtask_id(subtask_id)
+    allowed_statuses = {"planned", "in_progress", "done", "blocked"}
+    if status not in allowed_statuses:
+        raise SystemExit(f"STATUS должен быть одним из: {', '.join(sorted(allowed_statuses))}")
+
+    options = parse_subtask_options(args[3:])
+    state = load_state()
+    checkpoints = state.setdefault("checkpoints", {})
+    checkpoint = checkpoints.setdefault(
+        feature_key,
+        {
+            "feature_key": feature_key,
+            "requirement_text": read_requirement_text(feature_key),
+            "base_branch": options.get("base") or "unknown",
+            "branch_name": options.get("branch") or "",
+            "completed_steps": [],
+            "requirements_file": str(business_requirements_path(feature_key)),
+            "status": "planned",
+        },
+    )
+
+    if options.get("branch"):
+        checkpoint["branch_name"] = options["branch"]
+    if options.get("base"):
+        checkpoint["base_branch"] = options["base"]
+
+    subtasks = checkpoint.setdefault("subtasks", {})
+    subtask_order = checkpoint.setdefault("subtask_order", [])
+    if subtask_id not in subtask_order:
+        subtask_order.append(subtask_id)
+
+    subtask = subtasks.setdefault(
+        subtask_id,
+        {
+            "id": subtask_id,
+            "title": options.get("title") or "",
+            "status": "planned",
+            "notes": [],
+            "created_at": now_utc(),
+        },
+    )
+    if options.get("title"):
+        subtask["title"] = options["title"]
+    if options.get("note"):
+        subtask.setdefault("notes", []).append(options["note"])
+    if status == "in_progress" and not subtask.get("started_at"):
+        subtask["started_at"] = now_utc()
+    if status == "done":
+        subtask["completed_at"] = now_utc()
+    if status == "blocked" and options.get("last-error"):
+        subtask["last_error"] = options["last-error"]
+
+    subtask["status"] = status
+    subtask["updated_at"] = now_utc()
+    checkpoint["updated_at"] = now_utc()
+    checkpoint["status"] = f"subtask_{status}"
+
+    STATE_DIR.mkdir(exist_ok=True)
+    STATE_FILE.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"checkpoint={feature_key} | subtask={subtask_id} | status={status}")
+    return 0
+
+
+def parse_subtask_options(args: list[str]) -> dict[str, str]:
+    options: dict[str, str] = {}
+    allowed_options = {
+        "--title",
+        "--note",
+        "--branch",
+        "--base",
+        "--last-error",
+    }
+    index = 0
+    while index < len(args):
+        option = args[index]
+        if option not in allowed_options:
+            raise SystemExit(subtask_usage())
+        try:
+            value = args[index + 1]
+        except IndexError as exc:
+            raise SystemExit(f"{option} требует значение") from exc
+        options[option.removeprefix("--")] = value
+        index += 2
+    return options
+
+
+def subtask_usage() -> str:
+    return (
+        "Usage: /deli:subtask FEATURE_KEY SUBTASK_ID STATUS "
+        "[--title TITLE] [--note TEXT] [--branch BRANCH] [--base BASE] [--last-error TEXT]"
+    )
+
+
+def validate_subtask_id(subtask_id: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,63}", subtask_id):
+        raise SystemExit("SUBTASK_ID должен состоять из букв, цифр, '.', '_' или '-' и начинаться с буквы или цифры.")
 
 
 def parse_mark_options(args: list[str]) -> dict[str, str]:
@@ -394,6 +510,18 @@ def validate_required_mark_options(step: str, options: dict[str, str]) -> None:
         raise SystemExit(f"Cannot mark {step}: missing required option(s): {formatted}")
 
 
+def validate_subtasks_completed(checkpoint: dict) -> None:
+    incomplete = [
+        subtask_id
+        for subtask_id, subtask in checkpoint.get("subtasks", {}).items()
+        if subtask.get("status") != "done"
+    ]
+    if incomplete:
+        raise SystemExit(
+            f"Cannot mark implemented: incomplete subtask(s): {', '.join(sorted(incomplete))}"
+        )
+
+
 def invalidate_following_steps(checkpoint: dict, step: str) -> None:
     completed_steps = checkpoint.setdefault("completed_steps", [])
     if step not in completed_steps:
@@ -426,6 +554,15 @@ def next_workflow_step(completed_steps: list[str]) -> str | None:
     for step in WORKFLOW_STEP_ORDER:
         if step not in completed:
             return step
+    return None
+
+
+def next_open_subtask(checkpoint: dict) -> dict | None:
+    subtasks = checkpoint.get("subtasks", {})
+    for subtask_id in checkpoint.get("subtask_order", []):
+        subtask = subtasks.get(subtask_id)
+        if subtask and subtask.get("status") != "done":
+            return subtask
     return None
 
 
@@ -540,6 +677,14 @@ def print_checkpoint_status(checkpoint: dict) -> None:
         parts.append(f"build={checkpoint['build_url']}")
     if checkpoint.get("pr_url"):
         parts.append(f"pr={checkpoint['pr_url']}")
+    if checkpoint.get("subtasks"):
+        subtasks = checkpoint["subtasks"]
+        total = len(subtasks)
+        done = sum(1 for subtask in subtasks.values() if subtask.get("status") == "done")
+        parts.append(f"subtasks={done}/{total}")
+        next_subtask = next_open_subtask(checkpoint)
+        if next_subtask:
+            parts.append(f"next_subtask={next_subtask['id']}")
     parts.append(f"next={next_workflow_step(checkpoint.get('completed_steps', [])) or 'done'}")
     print(" | ".join(parts))
 
@@ -566,6 +711,7 @@ def print_help() -> None:
                 "  /deli:feature FEATURE_KEY @path/to/requirements.md",
                 "  /deli:validate <system|feature|file> [FEATURE_KEY|PATH]",
                 "  /deli:mark FEATURE_KEY STEP [--branch BRANCH] [--base BASE] [--status STATUS]",
+                "  /deli:subtask FEATURE_KEY SUBTASK_ID STATUS [--title TITLE] [--note TEXT]",
                 "  /deli:resume FEATURE_KEY",
                 "  /deli:status [FEATURE_KEY]",
                 "",
@@ -573,6 +719,7 @@ def print_help() -> None:
                 "  одна фича = одна ветка = один PR",
                 "  один execution agent выполняет реализацию",
                 "  тесты создаются или обновляются для всех бизнес-требований до review, но локально не запускаются",
+                "  большие фичи разбиваются на work items; состояние work items фиксируется через /deli:subtask в той же ветке",
                 "  code review выполняется до push и PR",
                 "  Jenkins CI запускается после merge PR в основную ветку",
                 "  системные и бизнес-требования требуют валидации человеком",

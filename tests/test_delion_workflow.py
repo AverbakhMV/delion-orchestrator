@@ -36,6 +36,8 @@ class DelionWorkflowTests(unittest.TestCase):
                 self.assertIn("## Требования", text)
                 self.assertIn("## Критерии готовности", text)
                 self.assertIn("## Следующий шаг", text)
+                self.assertIn("AGENTS.md", text)
+                self.assertIn("Target_columns", text)
 
     def test_project_root_arg_writes_init_output_to_project_not_extension_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as extension_dir, tempfile.TemporaryDirectory() as project_dir:
@@ -229,6 +231,80 @@ class DelionWorkflowTests(unittest.TestCase):
                 self.assertIn("resume_mode=agent", output.getvalue())
                 self.assertIn("next_step=implemented", output.getvalue())
                 self.assertIn("agent_action=implement_code", output.getvalue())
+
+    def test_subtask_state_is_recorded_and_reported_on_resume(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with working_directory(tmp):
+                output = io.StringIO()
+                with redirect_stdout(output):
+                    cli.main(["\\deli:mark", "BR-001", "branch_created", "--branch", "ai/br-001-export"])
+                    exit_code = cli.main([
+                        "\\deli:subtask",
+                        "BR-001",
+                        "WT-001",
+                        "in_progress",
+                        "--title",
+                        "Prepare mapping",
+                        "--branch",
+                        "ai/br-001-export",
+                    ])
+
+                self.assertEqual(exit_code, 0)
+                state = json.loads(Path(".deli/state.json").read_text(encoding="utf-8"))
+                checkpoint = state["checkpoints"]["BR-001"]
+                self.assertEqual(checkpoint["subtask_order"], ["WT-001"])
+                self.assertEqual(checkpoint["subtasks"]["WT-001"]["status"], "in_progress")
+                self.assertEqual(checkpoint["subtasks"]["WT-001"]["title"], "Prepare mapping")
+                self.assertEqual(checkpoint["branch_name"], "ai/br-001-export")
+
+                status_output = io.StringIO()
+                with redirect_stdout(status_output):
+                    status_code = cli.main(["\\deli:status", "BR-001"])
+
+                self.assertEqual(status_code, 0)
+                self.assertIn("subtasks=0/1", status_output.getvalue())
+                self.assertIn("next_subtask=WT-001", status_output.getvalue())
+
+                resume_output = io.StringIO()
+                with redirect_stdout(resume_output):
+                    resume_code = cli.main(["\\deli:resume", "BR-001"])
+
+                self.assertEqual(resume_code, 0)
+                self.assertIn("next_step=implemented", resume_output.getvalue())
+                self.assertIn("subtask_id=WT-001", resume_output.getvalue())
+                self.assertIn("subtask_status=in_progress", resume_output.getvalue())
+
+    def test_done_subtask_counts_as_completed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with working_directory(tmp):
+                with redirect_stdout(io.StringIO()):
+                    cli.main(["\\deli:subtask", "BR-001", "WT-001", "planned", "--title", "Prepare mapping"])
+                    exit_code = cli.main(["\\deli:subtask", "BR-001", "WT-001", "done", "--note", "implemented"])
+
+                self.assertEqual(exit_code, 0)
+                state = json.loads(Path(".deli/state.json").read_text(encoding="utf-8"))
+                subtask = state["checkpoints"]["BR-001"]["subtasks"]["WT-001"]
+                self.assertEqual(subtask["status"], "done")
+                self.assertEqual(subtask["notes"], ["implemented"])
+                self.assertIn("completed_at", subtask)
+
+    def test_implemented_requires_all_subtasks_done(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with working_directory(tmp):
+                with redirect_stdout(io.StringIO()):
+                    cli.main(["\\deli:mark", "BR-001", "branch_created", "--branch", "ai/br-001-export"])
+                    cli.main(["\\deli:subtask", "BR-001", "WT-001", "planned", "--title", "Prepare mapping"])
+
+                with self.assertRaises(SystemExit):
+                    cli.main(["\\deli:mark", "BR-001", "implemented", "--branch", "ai/br-001-export"])
+
+                with redirect_stdout(io.StringIO()):
+                    cli.main(["\\deli:subtask", "BR-001", "WT-001", "done"])
+                    exit_code = cli.main(["\\deli:mark", "BR-001", "implemented", "--branch", "ai/br-001-export"])
+
+                self.assertEqual(exit_code, 0)
+                state = json.loads(Path(".deli/state.json").read_text(encoding="utf-8"))
+                self.assertIn("implemented", state["checkpoints"]["BR-001"]["completed_steps"])
 
     def test_mark_rejects_unknown_step(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
